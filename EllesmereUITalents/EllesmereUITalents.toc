@@ -1,0 +1,13 @@
+## Interface: 120000, 120001, 120005, 120007, 120100, 16001
+## Title: |cff0cd29fEllesmereUI|r Talents
+## Category: |cff0cd29fEllesmere|rUI
+## Group: EllesmereUI
+## Notes: Shows "Unspent Talent Points : N" on screen while you have talent points left to spend.
+## Author: Dworak
+## Version: 9.4
+## Dependencies: EllesmereUI, EllesmereUIDworak
+## SavedVariables: EllesmereUITalentsDB
+## IconTexture: Interface\AddOns\EllesmereUI\media\eg-logo.tga
+
+# Dworak > Talents in the EllesmereUI panel (registered through EllesmereUIDworak)
+EllesmereUITalents.lua
