@@ -26,6 +26,8 @@ local TALENT_DEFAULTS = {
         talentsSound    = "none",       -- alert sound key, played when the reminder comes up
         talentsBgR = 0.05, talentsBgG = 0.05, talentsBgB = 0.05,
         talentsBgA      = 0,            -- background opacity 0..1 (0 = no background)
+        talentsLabelColor = "accent",   -- "accent" = UI Accent Color, "custom" = talentsLabelR/G/B
+        talentsLabelR = 1, talentsLabelG = 0.82, talentsLabelB = 0,
         -- talentsPosition (point, relPoint, x, y): set by Unlock Mode
     },
 }
@@ -183,9 +185,8 @@ local PAD_X, PAD_Y = 10, 4
 
 -- The frame fits its text, plus padding around it for the background.
 local function FrameSize()
-    local w = 200
-    if frame and frame.text:GetStringWidth() > 0 then w = frame.text:GetStringWidth() end
-    return math.ceil(w) + PAD_X * 2, TextHeight() + PAD_Y * 2
+    if frame and frame:GetWidth() > 0 then return frame:GetWidth(), frame:GetHeight() end
+    return 200 + PAD_X * 2, TextHeight() + PAD_Y * 2
 end
 
 -- Own sound tables (the catalogue's contract: every consumer builds its own),
@@ -221,36 +222,117 @@ local function Place()
     frame:SetPoint(pos.point, UIParent, pos.relPoint or pos.point, pos.x or 0, pos.y or 0)
 end
 
+-- The "Unspent Talent Points :" colour: the UI Accent Color, or a custom one.
+local function LabelHex()
+    if Get("talentsLabelColor") == "custom" then
+        return string.format("|cff%02x%02x%02x", Get("talentsLabelR") * 255,
+            Get("talentsLabelG") * 255, Get("talentsLabelB") * 255)
+    end
+    return ns.AccentHex()
+end
+
+-- One reminder box (background + text): the live frame and the options preview.
+local function MakeBox(box)
+    box.bg = box:CreateTexture(nil, "BACKGROUND")
+    box.bg:SetAllPoints()
+    box.text = box:CreateFontString(nil, "OVERLAY")
+    box.text:SetFontObject(GameFontHighlight) -- a font before the first SetText
+    box.text:SetPoint("CENTER")
+    box.text:SetShadowOffset(1, -1)
+    box.text:SetShadowColor(0, 0, 0, 1)
+    return box
+end
+
+-- Paints a box with the current settings for n points; it fits its text.
+local function StyleBox(box, n)
+    EllesmereUI.ApplyModuleFont(box.text, FontPath(), Get("talentsTextSize"))
+    box.text:SetText(LabelHex() .. "Unspent Talent Points :|r " .. n)
+    box:SetSize(math.ceil(box.text:GetStringWidth()) + PAD_X * 2, TextHeight() + PAD_Y * 2)
+    box.bg:SetColorTexture(Get("talentsBgR"), Get("talentsBgG"), Get("talentsBgB"), Get("talentsBgA"))
+end
+
 local function Build()
     if frame then return frame end
     frame = CreateFrame("Frame", "EUI_DworakTalentReminder", UIParent)
     frame:SetFrameStrata("HIGH")
     frame:SetClampedToScreen(true)
-    frame.bg = frame:CreateTexture(nil, "BACKGROUND")
-    frame.bg:SetAllPoints()
-    frame.text = frame:CreateFontString(nil, "OVERLAY")
-    frame.text:SetPoint("CENTER")
-    frame.text:SetShadowOffset(1, -1)
-    frame.text:SetShadowColor(0, 0, 0, 1)
+    MakeBox(frame)
     frame:Hide()
     Place()
     return frame
 end
 
+-------------------------------------------------------------------------------
+--  Options preview: the same box in the content header, with the real count
+--  (3 while no point is left), redrawn on every setting change.
+-------------------------------------------------------------------------------
+local PREVIEW_MIN_H, PREVIEW_MARGIN = 90, 14
+local preview
+
+-- The header height that fits the (scaled) box; the box shrinks to the
+-- header's width when a large Text Size would make it wider than the page.
+local function PreviewHeight()
+    local box = preview.box
+    local avail = (preview:GetWidth() or 0) - PREVIEW_MARGIN * 2
+    local scale = 1
+    if avail > 50 and box:GetWidth() > avail then scale = avail / box:GetWidth() end
+    box:SetScale(scale)
+    return math.max(PREVIEW_MIN_H, math.ceil(box:GetHeight() * scale) + PREVIEW_MARGIN * 2 + 12)
+end
+
+local function RefreshPreview()
+    if not (preview and preview:IsShown()) then return end
+    local n = UnspentPoints()
+    StyleBox(preview.box, n > 0 and n or 3)
+    local h = PreviewHeight()
+    if math.abs(preview:GetHeight() - h) > 1 then
+        preview:SetHeight(h)
+        local header = preview:GetParent()
+        if preview.built and header and header:IsVisible() and EllesmereUI.SetContentHeaderHeightSilent then
+            EllesmereUI:SetContentHeaderHeightSilent(h)
+        end
+    end
+    -- Dimmed while the reminder is off.
+    preview.box:SetAlpha(Enabled() and 1 or 0.5)
+    preview.hint:SetText(Enabled() and "" or "Preview (the reminder is off)")
+end
+
+local function HeaderBuilder(header, width)
+    if not preview then
+        preview = CreateFrame("Frame", nil, header)
+        preview.box = MakeBox(CreateFrame("Frame", nil, preview))
+        preview.box:SetPoint("CENTER")
+        preview.hint = preview:CreateFontString(nil, "OVERLAY")
+        preview.hint:SetFontObject(GameFontDisableSmall)
+        preview.hint:SetPoint("BOTTOM", preview, "BOTTOM", 0, 6)
+    end
+    preview:SetParent(header)
+    preview:SetFrameStrata(header:GetFrameStrata())
+    preview:SetFrameLevel(header:GetFrameLevel() + 5)
+    preview.box:SetFrameLevel(preview:GetFrameLevel() + 1)
+    preview:ClearAllPoints()
+    preview:SetPoint("TOPLEFT", header, "TOPLEFT")
+    preview:SetPoint("TOPRIGHT", header, "TOPRIGHT")
+    if width and width > 0 then preview:SetWidth(width) end
+    preview.built = false
+    preview:Show()
+    RefreshPreview()
+    preview.built = true
+    return preview:GetHeight()
+end
+
 local lastShown, lastCount = false, 0
 
 local function Render()
+    RefreshPreview()
     if not frame then return end
-    EllesmereUI.ApplyModuleFont(frame.text, FontPath(), Get("talentsTextSize"))
     local n = UnspentPoints()
-    frame.text:SetText(ns.AccentHex() .. "Unspent Talent Points :|r " .. n)
-    frame:SetSize(FrameSize())
-    frame.bg:SetColorTexture(Get("talentsBgR"), Get("talentsBgG"), Get("talentsBgB"), Get("talentsBgA"))
+    StyleBox(frame, n)
     local show = Enabled() and (unlocked or n > 0)
     frame:SetShown(show)
     -- The sound: the reminder comes up, or a new point arrives while it is up.
     if show and not unlocked and (not lastShown or n > lastCount) then PlayKey(Get("talentsSound")) end
-    lastShown, lastCount = show and not unlocked, n
+    lastShown, lastCount = show, n
 end
 
 -- Level-ups report the new point a moment after the event.
@@ -270,6 +352,8 @@ local function Apply()
     if events then events:UnregisterAllEvents() end
     if not Enabled() then
         if frame then frame:Hide() end
+        lastShown = false
+        RefreshPreview()
         return
     end
     Build()
@@ -292,6 +376,8 @@ local function BuildPage(pageName, parent, yOffset)
     local _, h
     parent._showRowDivider = true
     local function off() return not Enabled() end
+    local prebuilding = EllesmereUI.IsSearchPrebuild()
+    if not prebuilding then EllesmereUI:SetContentHeader(HeaderBuilder) end
 
     _, h = W:SectionHeader(parent, "TALENTS", y);  y = y - h
 
@@ -328,7 +414,7 @@ local function BuildPage(pageName, parent, yOffset)
               Set("talentsFont", v)
               Render()
           end },
-        { type = "slider", text = "Text Size", min = 8, max = 36, step = 1,
+        { type = "slider", text = "Text Size", min = 8, max = 72, step = 1,
           disabled = off, disabledTooltip = "Unspent Talent Points Reminder",
           getValue = function() return Get("talentsTextSize") end,
           setValue = function(v)
@@ -347,9 +433,33 @@ local function BuildPage(pageName, parent, yOffset)
               Set("talentsBgA", v / 100)
               Render()
           end },
-        EllesmereUI.BlankRowCfg()
+        { type = "dropdown", text = "Label Color",
+          tooltip = "The color of \"Unspent Talent Points :\". UI Accent Color follows Global Settings; "
+              .. "Custom uses the color next to it. The number stays white.",
+          values = { accent = "UI Accent Color", custom = "Custom" }, order = { "accent", "custom" },
+          disabled = off, disabledTooltip = "Unspent Talent Points Reminder",
+          getValue = function() return Get("talentsLabelColor") or "accent" end,
+          setValue = function(v)
+              Set("talentsLabelColor", v)
+              Render()
+              EllesmereUI:RefreshPage()
+          end }
     );  y = y - h
-    if not EllesmereUI.IsSearchPrebuild() and bgRow and bgRow._leftRegion then
+    if not prebuilding and bgRow and bgRow._rightRegion then
+        EllesmereUI.BuildInlineSwatches(bgRow._rightRegion, { {
+            tooltip = "Custom Label Color",
+            disabled = function() return off() or Get("talentsLabelColor") ~= "custom" end,
+            disabledTooltip = function() return off() and "Unspent Talent Points Reminder" or "Label Color: Custom" end,
+            getValue = function() return Get("talentsLabelR"), Get("talentsLabelG"), Get("talentsLabelB"), 1 end,
+            setValue = function(r, g, b)
+                Set("talentsLabelR", r)
+                Set("talentsLabelG", g)
+                Set("talentsLabelB", b)
+                Render()
+            end,
+        } }, { disabled = off, disabledTooltip = "Unspent Talent Points Reminder" })
+    end
+    if not prebuilding and bgRow and bgRow._leftRegion then
         EllesmereUI.BuildInlineSwatches(bgRow._leftRegion, { {
             tooltip = "Background Color",
             getValue = function() return Get("talentsBgR"), Get("talentsBgG"), Get("talentsBgB"), 1 end,
@@ -373,6 +483,10 @@ DW.AddModule({
     description = "Reminds you on screen while you have unspent talent points.",
     pages       = { "Talents" },
     buildPage   = BuildPage,
+    -- The preview lives in the content header; declaring the builder makes a
+    -- cached page whose header was dropped rebuild with it.
+    getHeaderBuilder = function() return HeaderBuilder end,
+    onPageCacheRestore = function() RefreshPreview() end,
 })
 
 -- /euitalents opens this page.
