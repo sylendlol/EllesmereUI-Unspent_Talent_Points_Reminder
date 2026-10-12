@@ -38,10 +38,12 @@ The reminder appears while you have talent points left to spend, and disappears 
 | Font | The EUI Global Font, Blizzard Default, any EllesmereUI font, or a SharedMedia font. |
 | Text Size | 8 to 36. |
 | Background | Background opacity (0 = no background) and its color. |
-
+| Label Color | **UI Accent Color** (follows EllesmereUI Global Settings, live) or **Custom** (pick any color). The number stays white. |
 - The "Unspent Talent Points :" label uses the **UI Accent Color** (EllesmereUI Global Settings) and updates live when you change it. The number is white.
 - If the count looks wrong, type `/euitalents debug` and include the chat output in your bug report.
 
+- A live preview at the top of the settings page shows every change as you make it.
+  
 ## Notes
 
 - Settings are saved per EllesmereUI profile and follow profile switches.
