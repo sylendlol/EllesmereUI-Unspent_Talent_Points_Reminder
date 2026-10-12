@@ -36,7 +36,7 @@ The reminder appears while you have talent points left to spend, and disappears 
 | Unspent Talent Points Reminder | Turns the reminder on or off (off by default). |
 | Sound | A sound that plays when the reminder appears, and again when you gain a new talent point. You can pick any EllesmereUI alert sound or SharedMedia sound. Default: None. |
 | Font | The EUI Global Font, Blizzard Default, any EllesmereUI font, or a SharedMedia font. |
-| Text Size | 8 to 36. |
+| Text Size | 8 to 72. |
 | Background | Background opacity (0 = no background) and its color. |
 | Label Color | **UI Accent Color** (follows EllesmereUI Global Settings, live) or **Custom** (pick any color). The number stays white. |
 - The "Unspent Talent Points :" label uses the **UI Accent Color** (EllesmereUI Global Settings) and updates live when you change it. The number is white.
