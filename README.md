@@ -1,3 +1,4 @@
+<img width="1000" height="766" alt="{D768F6EF-1DD2-4998-B0CE-6FB93590A7A3}" src="https://github.com/user-attachments/assets/1a776522-1dd6-40ee-b101-d80ff43ee800" />
 ## Requirements
 
 - **WoW Forever** (Interface 16001). The addons also list the retail interface versions, but they are only tested on WoW Forever.
@@ -18,10 +19,10 @@ Open the **EllesmereUI** settings panel. The **Dworak** section sits at the top 
 
 ```
 Dworak  
-  Talents
+  Unspent Talent Reminder
 ```
 
-To move the on-screen elements, open EllesmereUI **Unlock Mode**. They are listed under the **Talent Reminder**.
+To move the on-screen elements, open EllesmereUI **Unlock Mode**. They are listed under the ** Unspent Talent Reminder**.
 
 ---
 
@@ -50,5 +51,6 @@ The reminder appears while you have talent points left to spend, and disappears 
 - These addons use EllesmereUI's official Plugin API (`EllesmereUI\PLUGINS_API.md`), so EllesmereUI updates do not overwrite them.
 
 ## Author
-
 inspi_ration
+
+
