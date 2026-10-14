@@ -1,10 +1,12 @@
 if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
 -------------------------------------------------------------------------------
 --  EllesmereUITalents.lua
---  Dworak > Talents: the Unspent Talent Points reminder. While the player has
+--  Dworak > Unspent Talent Reminder: the Unspent Talent Points reminder. While the player has
 --  talent points left to spend it shows "Unspent Talent Points : N" on screen.
---  The label follows the UI Accent Color (Global Settings) live; the number
---  stays white. Moved in Unlock Mode ("Dworak" group, "Talent Reminder").
+--  The label is in the UI Accent Color (follows Global Settings live) or a
+--  custom color; the number stays white. Font, size, background and an alert
+--  sound are set on the page, with a live preview in the content header.
+--  Moved in Unlock Mode ("Dworak" group, "Unspent Talent Reminder").
 --
 --  Its own addon: it registers its row in the "Dworak" section through
 --  EllesmereUIDworak and needs nothing else from the other Dworak addons.
@@ -21,7 +23,6 @@ local TALENT_DEFAULTS = {
     profile = {
         talentsEnabled  = false,
         talentsTextSize = 16,
-        talentsWidth    = 260,          -- unused since the frame fits its text; kept for old saves
         talentsFont     = "__global",   -- "__global" = the EUI Global Font
         talentsSound    = "none",       -- alert sound key, played when the reminder comes up
         talentsBgR = 0.05, talentsBgG = 0.05, talentsBgB = 0.05,
@@ -63,25 +64,6 @@ function ns.AccentHex()
     return string.format("|cff%02x%02x%02x", r * 255, g * 255, b * 255)
 end
 
--- One-time move: Talents first shipped inside Bag Slots and kept its talents*
--- keys in the Bag Slots profile. Takes them over, then clears them there.
-local function MigrateFromBagSlots()
-    local profiles = EllesmereUIDB and EllesmereUIDB.profiles
-    if type(profiles) ~= "table" then return end
-    local p = DB()
-    for _, prof in pairs(profiles) do
-        local old = type(prof) == "table" and type(prof.addons) == "table" and prof.addons.EllesmereUIBagSlots
-        if type(old) == "table" then
-            for _, k in ipairs({ "talentsEnabled", "talentsTextSize", "talentsWidth", "talentsPosition" }) do
-                if old[k] ~= nil then
-                    if p[k] == nil then p[k] = old[k] end
-                    old[k] = nil
-                end
-            end
-        end
-    end
-end
-
 local UNLOCK_KEY = "EUI_DworakTalents"
 local DEFAULT_POS = { point = "TOP", relPoint = "TOP", x = 0, y = -160 }
 
@@ -117,7 +99,11 @@ local function TraitPoints()
     end
     if #trees == 0 and C_SpecializationInfo and C_ClassTalents.GetTraitTreeForSpec then
         local okS, specIndex = pcall(C_SpecializationInfo.GetSpecialization)
-        local specID = okS and specIndex and select(1, C_SpecializationInfo.GetSpecializationInfo(specIndex))
+        local specID
+        if okS and type(specIndex) == "number" and specIndex > 0 then
+            local okI, id = pcall(C_SpecializationInfo.GetSpecializationInfo, specIndex)
+            specID = okI and Plain(id) or nil
+        end
         local t = specID and Call(C_ClassTalents.GetTraitTreeForSpec, specID)
         if t then trees[1] = t end
     end
@@ -335,10 +321,18 @@ local function Render()
     lastShown, lastCount = show, n
 end
 
--- Level-ups report the new point a moment after the event.
+-- Events come in bursts (SPELLS_CHANGED, a tree of TRAIT_* on Apply Changes),
+-- and level-ups report the new point a moment after the event: one redraw now,
+-- one more 0.5s later for the whole burst.
+local pendingRedraw = false
 local function OnEvent()
     Render()
-    C_Timer.After(0.5, Render)
+    if pendingRedraw then return end
+    pendingRedraw = true
+    C_Timer.After(0.5, function()
+        pendingRedraw = false
+        Render()
+    end)
 end
 
 local EVENTS = {
@@ -368,7 +362,7 @@ local function Apply()
 end
 
 -------------------------------------------------------------------------------
---  Options page (the Dworak > Talents row, added below)
+--  Options page (the Dworak > Unspent Talent Reminder row, added below)
 -------------------------------------------------------------------------------
 local function BuildPage(pageName, parent, yOffset)
     local W = EllesmereUI.Widgets
@@ -475,13 +469,13 @@ local function BuildPage(pageName, parent, yOffset)
     return math.abs(y)
 end
 
--- Dworak > Talents row (the section is registered by EllesmereUIDworak at login).
+-- Dworak > Unspent Talent Reminder row (module key stays "Talents") (the section is registered by EllesmereUIDworak at login).
 DW.AddModule({
     key         = "Talents",
-    title       = "Talents",
+    title       = "Unspent Talent Reminder",
     order       = 20,
     description = "Reminds you on screen while you have unspent talent points.",
-    pages       = { "Talents" },
+    pages       = { "Unspent Talent Reminder" },
     buildPage   = BuildPage,
     -- The preview lives in the content header; declaring the builder makes a
     -- cached page whose header was dropped rebuild with it.
@@ -494,7 +488,7 @@ DW.AddModule({
 SLASH_EUITALENTS1 = "/euitalents"
 SlashCmdList.EUITALENTS = function(msg)
     if msg and msg:lower():match("debug") then
-        local P = function(t) EllesmereUI.Print(ns.AccentHex() .. "Talents:|r " .. t) end
+        local P = function(t) EllesmereUI.Print(ns.AccentHex() .. "Unspent Talent Reminder:|r " .. t) end
         P("enabled = " .. tostring(Enabled()) .. ", frame = " .. (frame and (frame:IsShown() and "shown" or "hidden") or "not built"))
         for _, src in ipairs(Sources()) do P(src[1] .. " = " .. tostring(src[2])) end
         P("shown count = " .. UnspentPoints())
@@ -515,7 +509,6 @@ local boot = CreateFrame("Frame")
 boot:RegisterEvent("PLAYER_LOGIN")
 boot:SetScript("OnEvent", function(self)
     self:UnregisterAllEvents()
-    MigrateFromBagSlots()
     if EllesmereUI.AppendSharedMediaSounds then
         EllesmereUI.AppendSharedMediaSounds(SOUND_PATHS, SOUND_NAMES, SOUND_ORDER)
     end
@@ -524,7 +517,7 @@ boot:SetScript("OnEvent", function(self)
     EllesmereUI:RegisterUnlockElements({
         EllesmereUI.MakeUnlockElement({
             key      = UNLOCK_KEY,
-            label    = "Talent Reminder",
+            label    = "Unspent Talent Reminder",
             group    = DW.UNLOCK_GROUP,
             order    = 910,
             noResize = true,
